@@ -85,7 +85,7 @@ On Windows, run `source .cache/env.sh` (Git Bash) first to keep tool caches insi
 
 ## Deploy
 
-Neon (Postgres + pgvector) + Railway (API) + Vercel (frontend). Step-by-step guide, cost notes and troubleshooting: **[docs/deploy.md](docs/deploy.md)**.
+Neon (Postgres + pgvector) + Railway or Hugging Face Spaces (API, free) + Vercel (frontend). Step-by-step guide, cost notes and troubleshooting: **[docs/deploy.md](docs/deploy.md)**.
 
 ## Evals
 

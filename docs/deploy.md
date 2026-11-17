@@ -152,6 +152,17 @@ That's your live link. Pushing to `main` redeploys both the backend (Railway) an
 - **Uploaded files are temporary.** The container's disk is wiped on every deploy. That's fine: a file is only read while it's being indexed, and its text and embeddings then live in Postgres.
 - **Secrets** live only in the Railway and Vercel dashboards and your local `.env`, never in the repo.
 
+## Free alternative: Hugging Face Spaces instead of Railway
+
+Free CPU hardware has enough memory for both models. The trade-offs: the Space sleeps after a period without visitors (the next request wakes it, which takes a minute or two), and it must be **public** so the browser can call it.
+
+1. On [huggingface.co](https://huggingface.co): **New → Space**. Pick a name (e.g. `documind-api`), **SDK: Docker** (blank template), hardware **CPU basic (free)**, visibility **Public**.
+2. In the Space: **Settings → Variables and secrets**. Add the variables from step 4 above as **secrets** (`DATABASE_URL`, `JWT_SECRET`, `GEMINI_API_KEY`) and **variables** (the rest). Skip `PORT`; `backend/README.md` already sets `app_port: 8000`.
+3. Create an access token: **Settings → Access Tokens → Create new token**, type **Write**.
+4. In the GitHub repo: **Settings → Secrets and variables → Actions**. Add the secret `HF_TOKEN` (the token) and, on the **Variables** tab, `HF_SPACE` = `<hf-username>/<space-name>`.
+5. In GitHub **Actions**, run **Deploy API to Hugging Face** (**Run workflow**). After that it runs by itself whenever `backend/` changes on `main`. It pushes `backend/` to the Space, and Hugging Face builds the Docker image.
+6. The API is at `https://<hf-username>-<space-name>.hf.space`. Use that as `VITE_API_URL` on Vercel (step 5), and put the Vercel URL in the Space's `CORS_ORIGINS` (step 6).
+
 ## Alternative: Render instead of Railway
 
 Steps 1–3 and 5–7 stay the same. Instead of step 4:

@@ -36,7 +36,8 @@ TextCrossEncoder('${RERANKER_MODEL}', cache_dir='/opt/models')"
 # Same base as the build image, so the venv's interpreter path matches.
 FROM python:3.12-slim-bookworm AS runtime
 
-RUN useradd --create-home --uid 10001 app
+# UID 1000: Hugging Face Spaces runs containers as 1000, so the app must own its files as 1000.
+RUN useradd --create-home --uid 1000 app
 COPY --from=build /opt/venv /opt/venv
 COPY --from=build --chown=app:app /opt/models /opt/models
 COPY --from=build --chown=app:app /app /app
