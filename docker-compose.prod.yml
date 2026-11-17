@@ -1,0 +1,46 @@
+# Production-like stack on one machine: Postgres + API + nginx serving the built frontend.
+#   docker compose -f docker-compose.prod.yml up --build -d     -> http://localhost:8080
+# Needs JWT_SECRET and an LLM key in .env. The hosted setup (Railway/Render + Neon + Vercel)
+# is described in docs/deploy.md.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-documind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-documind}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-documind}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-documind}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (openssl rand -hex 32)}
+      CORS_ORIGINS: '["http://localhost:8080"]'
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      target: prod
+    restart: unless-stopped
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

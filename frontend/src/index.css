@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background: white;
+  }
+}

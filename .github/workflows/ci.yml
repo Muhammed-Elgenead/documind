@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: documind
+          POSTGRES_PASSWORD: documind
+          POSTGRES_DB: documind_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U documind"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://documind:documind@localhost:5432/documind_test
+      TEST_DATABASE_URL: postgresql+asyncpg://documind:documind@localhost:5432/documind_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run alembic upgrade head
+      - run: uv run pytest -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  docker:
+    # Builds the production images and smoke-tests the API image against real Postgres:
+    # migrations run on start, /health answers, and an account can be created.
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: documind
+          POSTGRES_PASSWORD: documind
+          POSTGRES_DB: documind
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U documind"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -t documind-api backend
+      - name: Build frontend image (nginx)
+        run: docker build --target prod -t documind-web frontend
+      - name: Smoke-test API image
+        run: |
+          docker run -d --name api --network host \
+            -e PORT=8000 \
+            -e DATABASE_URL=postgresql://documind:documind@localhost:5432/documind?sslmode=disable \
+            -e JWT_SECRET=ci-secret-0123456789abcdef0123456789abcdef \
+            documind-api
+          for i in $(seq 1 60); do
+            curl -fsS localhost:8000/health && break
+            sleep 2
+          done
+          curl -fsS localhost:8000/health
+          code=$(curl -s -o /dev/null -w '%{http_code}' localhost:8000/documents)
+          test "$code" = 401
+          curl -fsS -X POST localhost:8000/auth/register \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"ci@example.com","password":"ci-password-123"}'
+      - name: API logs
+        if: always()
+        run: docker logs api || true
